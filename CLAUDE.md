@@ -35,7 +35,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 
 - `wayfinder-development` — Activates whenever referencing backend routes in frontend components. Use when importing from @/actions or @/routes, calling Laravel routes from TypeScript, or working with Wayfinder route functions.
 - `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
-- `inertia-vue-development` — Develops Inertia.js v2 Vue client-side applications. Activates when creating Vue pages, forms, or navigation; using &lt;Link&gt;, &lt;Form&gt;, useForm, or router; working with deferred props, prefetching, or polling; or when user mentions Vue with Inertia, Vue pages, Vue forms, or Vue navigation.
+- `inertia-vue-development` — Develops Inertia.js v2 Vue client-side applications. Activates when creating Vue pages, forms, or navigation; using <Link>, <Form>, useForm, or router; working with deferred props, prefetching, or polling; or when user mentions Vue with Inertia, Vue pages, Vue forms, or Vue navigation.
 - `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
 
 ## Conventions
@@ -196,10 +196,12 @@ protected function isAccessible(User $user, ?string $path = null): bool
 ## Authentication & Authorization
 
 - Use Laravel's built-in authentication and authorization features (gates, policies, Sanctum, etc.).
+- **FOAMS uses Laravel Fortify for authentication scaffolding** — do not bypass or replace Fortify's auth pipeline.
 
 ## URL Generation
 
 - When generating links to other pages, prefer named routes and the `route()` function.
+- **Use Wayfinder** when referencing routes from Vue/TypeScript frontend files.
 
 ## Queues
 
@@ -289,3 +291,293 @@ Vue components must have a single root element.
 - IMPORTANT: Activate `tailwindcss-development` every time you're working with a Tailwind CSS or styling-related task.
 
 </laravel-boost-guidelines>
+
+---
+
+# FOAMS — Field Operations & Asset Management System
+## ICT Authority of Kenya · eGovernment Department
+### Project Memory · Last updated: February 2026
+### Documents: URD/2026/001 · SRS/2026/001 · ADD/2026/001
+
+---
+
+## What This Project Is
+
+FOAMS manages ICTA field teams (RICTOs, ICTOs, AICTOs) across Kenya's 47 counties, tracking three types of government ICT infrastructure:
+
+- **Public WiFi Hotspots** — public-facing hotspots in towns and public spaces
+- **NOFBI Nodes** — National Optic Fibre Backbone Infrastructure nodes
+- **OGN Equipment Sites** — Official Government Network equipment
+
+Key capabilities: asset inventory, daily status monitoring, issue/complaint management, SLA tracking, real-time notifications, analytics dashboards, public complaint portal, offline-capable field tools.
+
+---
+
+## Stack Notes (FOAMS-specific additions to Boost baseline)
+
+The Boost baseline above defines the core stack. These are the additional packages specific to FOAMS:
+
+| Package | Purpose |
+|---|---|
+| `spatie/laravel-permission` v6 | Role-based access control (8 roles) |
+| `pragmarx/google2fa-laravel` | TOTP two-factor authentication |
+| `laravel/horizon` | Redis queue worker dashboard |
+| `laravel/reverb` | Self-hosted WebSocket server |
+| `barryvdh/laravel-dompdf` | Server-side PDF report generation |
+| `maatwebsite/excel` | Excel/CSV report export |
+| Africa's Talking SDK | SMS gateway (Kenyan provider) |
+| `vite-plugin-pwa` + `idb` | Offline PWA + IndexedDB for field use |
+
+**Web server:** Apache 2.4 with PHP 8.3 FPM (on-premises at ICTA — not Sail in production)
+
+**Do not suggest** switching to a cloud deployment, using API tokens for browser auth, or adding a separate REST API layer — Inertia handles all frontend data via server-side rendering.
+
+---
+
+## Stack Version Corrections (ADD vs actual installed)
+
+The ADD was drafted before Boost was installed. Where they differ, **Boost wins**:
+
+| Layer | ADD said | Actual (Boost) |
+|---|---|---|
+| Laravel | 11 | **12** |
+| Inertia | v1 | **v2** |
+| Tailwind | v3 | **v4** |
+| Pest | v2 | **v4** |
+| Auth scaffolding | Manual Sanctum | **Laravel Fortify** |
+| Route typing | None | **Laravel Wayfinder** |
+
+Middleware registration: **bootstrap/app.php** (Laravel 12 style) — not Kernel.php.
+The `RegionScopeMiddleware` and `TwoFactorMiddleware` must be registered in `bootstrap/app.php`.
+
+---
+
+## The Eight User Roles
+
+Managed via `spatie/laravel-permission`. Seeded in `RoleSeeder`.
+
+| Display Name | Spatie slug | Scope |
+|---|---|---|
+| System Administrator | `admin` | Unrestricted — all data, all config |
+| Director | `director` | National read + escalation receipt |
+| NOC Officer | `noc` | National issue management |
+| RICTO | `ricto` | Region-scoped — issues, officers, assets |
+| ICTO | `icto` | Region-scoped — assets, logs, issues |
+| AICTO | `aicto` | Region-scoped — assets, logs, issues |
+| Public Servant | `public_servant` | Own submitted issues only |
+| General Public | `public` | Unauthenticated submit + track by reference |
+
+**Critical rule:** RICTO, ICTO, and AICTO are region-scoped at the **data layer** via `RegionScopeMiddleware` + Eloquent global scopes. Never rely on frontend filtering alone.
+
+---
+
+## Database — 13 Core Tables
+
+### Table Schemas (quick reference)
+
+**users** — id, name, username (UNIQUE), email (UNIQUE), phone, password (bcrypt≥12), region_id (FK nullable), is_active, two_factor_secret, two_factor_confirmed_at, failed_login_attempts, locked_until, deleted_at, timestamps
+
+**regions** — id, name (UNIQUE), code (UNIQUE), is_active, deleted_at, timestamps
+
+**counties** — id, name (UNIQUE), code (UNIQUE), region_id (FK→regions), timestamps
+
+**assets** — id, asset_code (UNIQUE, system-generated e.g. WIFI-MSA-001), name, type ENUM('wifi_hotspot','nofbi_node','ogn_equipment'), county_id (FK), location_name, latitude DECIMAL(10,7), longitude DECIMAL(10,7), assigned_to (FK→users nullable), installation_date, manufacturer, model, serial_number (UNIQUE nullable), status ENUM('operational','degraded','down','maintenance','decommissioned'), deleted_at, timestamps
+
+**asset_status_logs** — id, asset_id (FK), user_id (FK), logged_date DATE, observed_at TIME, status ENUM('operational','degraded','down','maintenance'), throughput_mbps DECIMAL(8,2), remarks TEXT, latitude, longitude, is_amendment BOOL, amendment_reason TEXT, synced_at (NULL = created offline), timestamps
+→ UNIQUE(asset_id, user_id, logged_date)
+
+**issues** — id, reference_number (UNIQUE, e.g. ISS-0847), asset_id (FK nullable), county_id (FK, denormalised for region scoping), issue_type VARCHAR, severity ENUM('low','medium','high','critical'), status ENUM('new','acknowledged','in_progress','pending_third_party','escalated','resolved','closed','duplicate'), reporter_category ENUM('general_public','public_servant','field_officer'), reporter_name/email/phone (nullable), created_by_user_id (FK nullable), assigned_to_user_id (FK nullable), description TEXT (FULLTEXT indexed), workaround_applied BOOL, duplicate_of_id (self-FK nullable), acknowledged_at, resolved_at, closed_at, sla_due_at, sla_breached BOOL, is_escalated BOOL, escalated_at, escalated_by_user_id (FK nullable), timestamps
+
+**issue_activities** (**APPEND-ONLY** — no UPDATE/DELETE ever) — id, issue_id (FK), user_id (FK nullable), action_type VARCHAR('status_change','comment','field_note','escalation','assignment'), previous_status, new_status, comment TEXT, is_internal BOOL (hides from public tracker), created_at only (no updated_at)
+
+**resolutions** — id, issue_id (UNIQUE FK), root_cause TEXT (FULLTEXT indexed), steps_taken JSON (array ≤10 items), resolution_type ENUM('temporary','permanent'), resolved_by_user_id (FK), resolved_at, timestamps
+
+**attachments** (polymorphic) — id, attachable_type, attachable_id, original_name, stored_name (UUID-based), mime_type, size_bytes, uploaded_by (FK→users), timestamps
+
+**audit_logs** (**IMMUTABLE** — no UPDATE/DELETE ever) — id, user_id (FK nullable), event VARCHAR, auditable_type, auditable_id, old_values JSON, new_values JSON, ip_address, user_agent, created_at only
+
+**sla_configurations** — id, severity ENUM, acknowledge_within_hrs SMALLINT, resolve_within_hrs SMALLINT, effective_from TIMESTAMP, created_by_user_id (FK), timestamps
+
+**notifications** — standard Laravel notifications table
+
+**model_has_roles / role_has_permissions / etc.** — standard Spatie tables (auto-created by Spatie migration)
+
+### Required Indexes
+```sql
+-- issues
+INDEX idx_issues_county_status (county_id, status)
+INDEX idx_issues_severity_status (severity, status)
+INDEX idx_issues_sla_due (sla_due_at)
+FULLTEXT INDEX ft_issues_description (description)
+
+-- asset_status_logs
+INDEX idx_asl_asset_date (asset_id, logged_date)
+INDEX idx_asl_user_date (user_id, logged_date)
+
+-- resolutions
+FULLTEXT INDEX ft_resolutions_root_cause (root_cause)
+```
+
+---
+
+## Issue Status Workflow
+
+```
+New → Acknowledged → In Progress → Resolved → Closed
+                            ↘ Pending Third Party ↗
+                            ↘ Escalated ↗
+              (terminal) → Duplicate
+```
+
+Every transition is logged in `issue_activities`. Enforced by `IssuePolicy` — role-based transition permissions apply.
+
+---
+
+## SLA Targets (stored in sla_configurations, not hardcoded)
+
+| Severity | Acknowledge Within | Resolve Within |
+|---|---|---|
+| Critical | 1 hour | 4 hours |
+| High | 4 hours | 8 hours |
+| Medium | 8 hours | 24 hours |
+| Low | 24 hours | 72 hours |
+
+`sla_due_at` computed on issue creation from `sla_configurations`. `foams:check-sla` runs every 5 minutes via scheduler. **Never hardcode these values.**
+
+---
+
+## Key Business Rules (from SRS — enforce these always)
+
+1. **One status log per asset per officer per day** — UNIQUE(asset_id, user_id, logged_date). Amendments: new row with is_amendment=true.
+2. **Login lockout** — 5 failures → locked_until = now() + 30 min. Fortify handles this; ensure config aligns.
+3. **Password reset tokens expire in 15 minutes** and invalidate ALL sessions for that user on use.
+4. **Public issue submission is unauthenticated** — rate-limited 10/min per IP.
+5. **Acknowledgement email within 5 minutes** of public issue creation — queued job, `notifications` queue.
+6. **Critical issues → immediate SMS** to RICTO's phone — `critical` queue, Africa's Talking.
+7. **SLA 50% elapsed** → warning to NOC + RICTO. **Breach (100%)** → flag issue, auto-escalate to Director, notify NOC + RICTO + Director.
+8. **Daily reminders** — 16:00 EAT (officers), 18:00 EAT (RICTO, escalation if officers haven't logged).
+9. **issue_activities and audit_logs are append-only** — REVOKE UPDATE/DELETE from `foams_app` DB user at MySQL level.
+10. **Attachments** — stored as UUID filenames under `storage/app/private`. Never web-accessible. Serve via `Storage::temporaryUrl()` (15-min signed URLs).
+11. **Public tracker** — shows reference number, status, location, non-internal comments only. Never exposes officer identities or internal notes (`is_internal = true` rows are hidden).
+12. **Reporter personal data purged 12 months** after issue closure — Kenya Data Protection Act 2019.
+13. **Session timeout: 30 minutes** idle — configured via Fortify/Sanctum session lifetime.
+14. **Uptime threshold: 95%** — assets below this are highlighted amber/red in dashboard.
+
+---
+
+## Service Layer
+
+Controllers are thin — validate via FormRequest, call a Service, return `Inertia::render()`.
+
+| Service | Key Methods |
+|---|---|
+| `IssueService` | `createIssue()`, `transitionStatus()`, `escalate()`, `resolve()`, `close()`, `generateReferenceNumber()` |
+| `SlaService` | `computeDueAt(Issue): Carbon`, `runSlaCheck()` |
+| `UptimeService` | `computeUptime(Asset, Carbon $from, Carbon $to): float`, `getAvailabilityCalendar()` |
+| `NotificationService` | `notifyRicto()`, `dispatchStatusChangeEmail()`, `queueSms()` |
+| `ReportService` | `buildIssueReport(array $filters)`, `buildAssetReport(array $filters)` |
+| `OfflineSyncService` | `reconcileOfflineLog(array $payload, User $user)` |
+
+---
+
+## Background Jobs & Queues
+
+Queue driver: **Redis** via **Laravel Horizon**. Workers managed by Supervisor.
+
+| Job | Queue | Trigger |
+|---|---|---|
+| `SendIssueAcknowledgementEmail` | `notifications` | Issue created (public/public_servant) |
+| `SendStatusChangeEmail` | `notifications` | Any status transition |
+| `SendSmsJob` | `critical` | Critical issue raised, RICTO has phone |
+| `SendEscalationNotification` | `critical` | Issue escalated |
+| `SendSlaBreachNotification` | `critical` | SLA check detects breach |
+| `SendDailyStatusReminder` | `notifications` | Scheduler 16:00 + 18:00 EAT |
+| `GenerateReportJob` | `reports` | User requests PDF/Excel export |
+| `ProcessOfflineSyncJob` | `default` | Field device reconnects and syncs |
+
+---
+
+## Real-Time Broadcasting (Laravel Reverb + Laravel Echo)
+
+Reverb: `127.0.0.1:8080`, reverse-proxied through Apache (`wss://`).
+
+| Event | Channel | Triggers |
+|---|---|---|
+| `IssueStatusChanged` | `private-region.{region_id}` | Real-time panel row update |
+| `IssueRaised` | `private-region.{region_id}` | Notification bell badge |
+| `IssueEscalated` | `private-user.{director_id}` | Director direct alert |
+| `SlaBreached` | `private-region.{region_id}` | Row turns red in issues panel |
+| `StatusLogSubmitted` | `private-region.{region_id}` | RICTO compliance table update |
+
+---
+
+## Offline Field Support (PWA)
+
+- Service Worker via `vite-plugin-pwa`
+- Offline data capture uses **IndexedDB** via `idb` library
+- Composable: `useOfflineSync.js` — queues to IndexedDB offline, auto-syncs on `window.online`
+- Sync endpoint: `POST /offline-sync` → dispatches `ProcessOfflineSyncJob`
+- Yellow "Offline" banner displayed when `navigator.onLine === false`
+
+---
+
+## ICTA Brand (apply in all Vue pages via Tailwind)
+
+| Token | Hex | Use |
+|---|---|---|
+| Primary dark blue | `#1F3864` | Sidebar, headings, primary buttons |
+| Accent mid blue | `#2E5FA3` | Links, active states, secondary buttons |
+| Light blue | `#D6E4F7` | Table header backgrounds |
+| Pale blue | `#EEF4FB` | Alternating table rows, card backgrounds |
+
+Font: **Arial** system font — no Google Fonts CDN dependency in production.
+
+---
+
+## Deployment (On-Premises at ICTA)
+
+- Apache 2.4 + PHP 8.3 FPM (not Sail in production — Sail for local dev only)
+- Supervisor manages: `foams-horizon` + `foams-reverb`
+- Environments: `local` → `staging (foams-uat.ict.go.ke)` → `production (foams.ict.go.ke)`
+- All data stored on ICTA premises in Kenya (data sovereignty requirement)
+- Daily MySQL backups; RPO ≤ 24h; RTO ≤ 4h
+
+---
+
+## Development Phase Plan
+
+**Phase 1 (Weeks 1–6) — Foundation**
+Migrations → Seeders → Models → Spatie RBAC → Fortify auth + 2FA → RegionScopeMiddleware → Asset/Region CRUD → Daily status log → UptimeService → Pest tests for all of the above
+
+**Phase 2 (Weeks 7–10) — Issues, Notifications & Reports**
+IssueService + full workflow → NOC panel → SlaService + scheduler → Email/SMS notifications → Reverb WebSocket + Echo → Real-time panel → Escalation → PDF/Excel reports → Public portal
+
+**Phase 3 (Weeks 11–14) — Offline & Hardening**
+PWA/Service Worker → IndexedDB offline queue → Security hardening (CSP, rate limits) → Pen test prep → DPIA → UAT on staging → Production deploy
+
+---
+
+## What to Always Do
+
+- Use **Fortify** for authentication — don't build auth from scratch
+- Use **Wayfinder** when calling routes from Vue components
+- Write **Pest feature tests** alongside every feature (happy path + auth failure + policy rejection + validation failure)
+- Put business logic in **Services**, not controllers
+- Enforce region scoping at the **data layer** (Eloquent global scopes), never only at UI
+- Use **FormRequest** classes for all validation
+- Fire **Events** on significant state changes → Listeners handle side effects
+- Write to **audit_logs** via `AuditObserver` on every model mutation
+- Store all timestamps in **UTC**; display in **EAT (Africa/Nairobi)** via Carbon
+- Run `vendor/bin/pint --dirty --format agent` after every PHP file change
+
+## What to Never Do
+
+- Never hardcode SLA values — always read from `sla_configurations`
+- Never allow UPDATE or DELETE on `issue_activities` or `audit_logs`
+- Never store uploaded files with original filenames — always UUID-named
+- Never serve attachments directly — always `Storage::temporaryUrl()`
+- Never enforce region scoping only in Vue — enforce at Eloquent level
+- Never put raw queries in controllers — use Eloquent
+- Never use `env()` outside config files
+- Never skip the Pest test for a completed feature
+- Never use `DB::` — prefer `Model::query()`
