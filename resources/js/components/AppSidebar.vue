@@ -26,6 +26,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import RegionController from '@/actions/App/Http/Controllers/Admin/RegionController';
+import CountyController from '@/actions/App/Http/Controllers/Admin/CountyController';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
@@ -41,7 +43,8 @@ const navItems = computed((): NavItem[] => {
         return [
             { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
             { title: 'Assets', href: '#', icon: Wifi },
-            { title: 'Regions', href: '#', icon: MapPin },
+            { title: 'Regions', href: RegionController.index.url(), icon: MapPin },
+            { title: 'Counties', href: CountyController.index.url(), icon: MapPin },
             { title: 'Users', href: '#', icon: Users },
             { title: 'SLA Config', href: '#', icon: Settings },
             { title: 'Audit Log', href: '#', icon: ScrollText },
