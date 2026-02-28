@@ -41,7 +41,27 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Run the RegionScopeMiddleware for a given user so that any global scopes
+ * it registers land on the model classes, exactly as during a real request.
+ */
+function applyRegionScopeMiddleware(\App\Models\User $user): void
 {
-    // ..
+    $request = \Illuminate\Http\Request::create('/dashboard', 'GET');
+    $request->setUserResolver(fn () => $user);
+
+    (new \App\Http\Middleware\RegionScopeMiddleware)->handle($request, fn () => new \Symfony\Component\HttpFoundation\Response);
+}
+
+/**
+ * Remove RegionScope from the static global-scope registry so scopes
+ * registered in one test cannot bleed into subsequent tests.
+ */
+function clearRegionScope(): void
+{
+    $ref = new ReflectionProperty(\Illuminate\Database\Eloquent\Model::class, 'globalScopes');
+    $scopes = $ref->getValue(null);
+    unset($scopes[\App\Models\Asset::class][\App\Models\Scopes\RegionScope::class]);
+    unset($scopes[\App\Models\Issue::class][\App\Models\Scopes\RegionScope::class]);
+    $ref->setValue(null, $scopes);
 }

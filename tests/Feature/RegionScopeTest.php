@@ -1,44 +1,11 @@
 <?php
 
-use App\Http\Middleware\RegionScopeMiddleware;
 use App\Models\Asset;
 use App\Models\County;
 use App\Models\Issue;
 use App\Models\Region;
-use App\Models\Scopes\RegionScope;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
-
-/**
- * Run the RegionScopeMiddleware for a given user and return control.
- *
- * This exercises the real middleware handle() method so that any global scopes
- * it registers land on the model classes, exactly as they would during a real
- * HTTP request.
- */
-function applyRegionScopeMiddleware(User $user): void
-{
-    $request = Request::create('/dashboard', 'GET');
-    $request->setUserResolver(fn () => $user);
-
-    (new RegionScopeMiddleware)->handle($request, fn () => new Response);
-}
-
-/**
- * Remove RegionScope from the static global-scope registry after each test so
- * scopes registered for one test cannot bleed into the next.
- */
-function clearRegionScope(): void
-{
-    $ref = new ReflectionProperty(Model::class, 'globalScopes');
-    $scopes = $ref->getValue(null);
-    unset($scopes[Asset::class][RegionScope::class]);
-    unset($scopes[Issue::class][RegionScope::class]);
-    $ref->setValue(null, $scopes);
-}
 
 // ─── RegionScopeMiddleware ────────────────────────────────────────────────────
 
