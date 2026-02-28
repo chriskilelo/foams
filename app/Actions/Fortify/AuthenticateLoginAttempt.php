@@ -24,6 +24,12 @@ class AuthenticateLoginAttempt
             return null;
         }
 
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been deactivated. Please contact your administrator.',
+            ]);
+        }
+
         if ($user->locked_until && now()->lessThan($user->locked_until)) {
             AuditLog::create([
                 'user_id' => $user->id,

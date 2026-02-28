@@ -2,6 +2,7 @@
 
 use App\Enums\AssetStatus;
 use App\Models\Asset;
+use App\Models\AuditLog;
 use App\Models\County;
 use App\Models\Region;
 use App\Models\User;
@@ -500,5 +501,89 @@ describe('assets destroy', function () {
 
         $this->delete(route('assets.destroy', $asset))
             ->assertRedirect(route('login'));
+    });
+});
+
+// ─── Assign ───────────────────────────────────────────────────────────────────
+
+describe('assets assign', function () {
+    it('ricto can assign an asset to an icto in their region', function () {
+        $region = Region::factory()->create();
+        $county = County::factory()->for($region)->create();
+        $asset = Asset::factory()->for($county, 'county')->create();
+        $icto = ictoForAsset($region);
+
+        $this->actingAs(rictoForAsset($region))
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $icto->id])
+            ->assertRedirect(route('assets.show', $asset));
+
+        expect($asset->fresh()->assigned_to)->toBe($icto->id);
+    });
+
+    it('ricto cannot assign an asset to an icto in a different region', function () {
+        [$regionA, $regionB] = Region::factory()->count(2)->create();
+        $countyA = County::factory()->for($regionA)->create();
+        $asset = Asset::factory()->for($countyA, 'county')->create();
+        $ictoInRegionB = ictoForAsset($regionB);
+
+        $this->actingAs(rictoForAsset($regionA))
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $ictoInRegionB->id])
+            ->assertSessionHasErrors('assigned_to');
+
+        expect($asset->fresh()->assigned_to)->toBeNull();
+    });
+
+    it('admin can assign an asset to any icto in any region', function () {
+        [$regionA, $regionB] = Region::factory()->count(2)->create();
+        $countyA = County::factory()->for($regionA)->create();
+        $asset = Asset::factory()->for($countyA, 'county')->create();
+        $ictoInRegionB = ictoForAsset($regionB);
+
+        $this->actingAs(adminForAsset())
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $ictoInRegionB->id])
+            ->assertRedirect(route('assets.show', $asset));
+
+        expect($asset->fresh()->assigned_to)->toBe($ictoInRegionB->id);
+    });
+
+    it('assignment is logged to audit_logs', function () {
+        $region = Region::factory()->create();
+        $county = County::factory()->for($region)->create();
+        $asset = Asset::factory()->for($county, 'county')->create();
+        $icto = ictoForAsset($region);
+
+        $this->actingAs(adminForAsset())
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $icto->id]);
+
+        expect(
+            AuditLog::query()
+                ->where('event', 'asset.assigned')
+                ->where('auditable_type', Asset::class)
+                ->where('auditable_id', $asset->id)
+                ->exists()
+        )->toBeTrue();
+    });
+
+    it('icto cannot assign an asset', function () {
+        $region = Region::factory()->create();
+        $county = County::factory()->for($region)->create();
+        $asset = Asset::factory()->for($county, 'county')->create();
+        $otherIcto = ictoForAsset($region);
+
+        $this->actingAs(ictoForAsset($region))
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $otherIcto->id])
+            ->assertForbidden();
+    });
+
+    it('assign fails if assigned_to user does not have icto or aicto role', function () {
+        $region = Region::factory()->create();
+        $county = County::factory()->for($region)->create();
+        $asset = Asset::factory()->for($county, 'county')->create();
+        $noc = User::factory()->create(['region_id' => $region->id]);
+        $noc->assignRole('noc');
+
+        $this->actingAs(adminForAsset())
+            ->patch(route('assets.assign', $asset), ['assigned_to' => $noc->id])
+            ->assertSessionHasErrors('assigned_to');
     });
 });

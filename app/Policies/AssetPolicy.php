@@ -54,6 +54,15 @@ class AssetPolicy
     }
 
     /**
+     * Admin and RICTO can assign an asset to an ICTO or AICTO officer.
+     * Region-scoping for RICTO is enforced in AssignAssetRequest.
+     */
+    public function assign(User $user, Asset $asset): bool
+    {
+        return $user->hasRole('ricto');
+    }
+
+    /**
      * Only admin can soft-delete assets (admin handled by before()).
      */
     public function delete(User $user, Asset $asset): bool

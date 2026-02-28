@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Assets\AssetController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -15,6 +16,7 @@ Route::middleware(['auth', 'verified', 'two_factor', 'region.scope', 'not_public
 
 Route::middleware(['auth', 'two_factor', 'region.scope'])->group(function () {
     Route::resource('assets', AssetController::class);
+    Route::patch('assets/{asset}/assign', [AssetController::class, 'assign'])->name('assets.assign');
 });
 
 Route::middleware(['auth', 'two_factor', 'role:admin'])
@@ -23,6 +25,8 @@ Route::middleware(['auth', 'two_factor', 'role:admin'])
     ->group(function () {
         Route::resource('regions', Admin\RegionController::class)->except('show');
         Route::resource('counties', Admin\CountyController::class)->except('show');
+        Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update']);
+        Route::patch('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
     });
 
 require __DIR__.'/settings.php';

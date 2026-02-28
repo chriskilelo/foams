@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Assets;
 use App\Enums\AssetStatus;
 use App\Enums\AssetType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Assets\AssignAssetRequest;
 use App\Http\Requests\Assets\StoreAssetRequest;
 use App\Http\Requests\Assets\UpdateAssetRequest;
 use App\Models\Asset;
+use App\Models\AuditLog;
 use App\Models\County;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -147,6 +149,26 @@ class AssetController extends Controller
     public function update(UpdateAssetRequest $request, Asset $asset): RedirectResponse
     {
         $asset->update($request->validated());
+
+        return redirect()->route('assets.show', $asset);
+    }
+
+    public function assign(AssignAssetRequest $request, Asset $asset): RedirectResponse
+    {
+        $previousAssignee = $asset->assigned_to;
+
+        $asset->update(['assigned_to' => $request->validated()['assigned_to']]);
+
+        AuditLog::create([
+            'user_id' => $request->user()->id,
+            'event' => 'asset.assigned',
+            'auditable_type' => Asset::class,
+            'auditable_id' => $asset->id,
+            'old_values' => ['assigned_to' => $previousAssignee],
+            'new_values' => ['assigned_to' => $asset->assigned_to],
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('assets.show', $asset);
     }
