@@ -41,16 +41,16 @@ defineProps<{
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
+                    <Label for="email">Email or username</Label>
                     <Input
                         id="email"
-                        type="email"
+                        type="text"
                         name="email"
                         required
                         autofocus
                         :tabindex="1"
-                        autocomplete="email"
-                        placeholder="email@example.com"
+                        autocomplete="username"
+                        placeholder="Email or username"
                     />
                     <InputError :message="errors.email" />
                 </div>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
@@ -81,4 +82,87 @@ test('users are rate limited', function () {
     ]);
 
     $response->assertTooManyRequests();
+});
+
+test('failed login increments failed_login_attempts', function () {
+    $user = User::factory()->create();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'wrong-password',
+    ]);
+
+    expect($user->fresh()->failed_login_attempts)->toBe(1);
+    $this->assertGuest();
+});
+
+test('fifth failed login sets locked_until', function () {
+    $user = User::factory()->create(['failed_login_attempts' => 4]);
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'wrong-password',
+    ]);
+
+    $user->refresh();
+    expect($user->failed_login_attempts)->toBe(5);
+    expect($user->locked_until)->not->toBeNull();
+    expect($user->locked_until->isFuture())->toBeTrue();
+    $this->assertGuest();
+});
+
+test('locked user cannot log in before lockout expires', function () {
+    $user = User::factory()->create([
+        'failed_login_attempts' => 5,
+        'locked_until' => now()->addMinutes(30),
+    ]);
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $response->assertSessionHasErrors('email');
+    $this->assertGuest();
+});
+
+test('login success is logged to audit_logs', function () {
+    $user = User::factory()->create();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    expect(
+        AuditLog::query()
+            ->where('user_id', $user->id)
+            ->where('event', 'login.success')
+            ->exists()
+    )->toBeTrue();
+});
+
+test('users can authenticate using their username', function () {
+    $user = User::factory()->create();
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->username,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('dashboard', absolute: false));
+});
+
+test('successful login resets failed login attempts', function () {
+    $user = User::factory()->create(['failed_login_attempts' => 3]);
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    expect($user->fresh()->failed_login_attempts)->toBe(0);
 });
