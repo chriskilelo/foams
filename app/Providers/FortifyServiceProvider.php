@@ -5,8 +5,12 @@ namespace App\Providers;
 use App\Actions\Fortify\AuthenticateLoginAttempt;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Listeners\LogLogoutToAuditLog;
+use App\Listeners\LogPasswordResetToAuditLog;
 use App\Listeners\LogTwoFactorDisabledToAuditLog;
 use App\Listeners\SetTwoFactorSessionOnValidCode;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -88,6 +92,8 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Event::listen(ValidTwoFactorAuthenticationCodeProvided::class, SetTwoFactorSessionOnValidCode::class);
         Event::listen(TwoFactorAuthenticationDisabled::class, LogTwoFactorDisabledToAuditLog::class);
+        Event::listen(Logout::class, LogLogoutToAuditLog::class);
+        Event::listen(PasswordReset::class, LogPasswordResetToAuditLog::class);
     }
 
     /**

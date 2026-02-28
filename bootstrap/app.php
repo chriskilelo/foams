@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureNotPublicRole;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RegionScopeMiddleware;
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'region.scope' => RegionScopeMiddleware::class,
             'two_factor' => TwoFactorMiddleware::class,
+            'not_public_role' => EnsureNotPublicRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

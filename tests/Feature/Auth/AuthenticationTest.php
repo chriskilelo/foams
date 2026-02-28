@@ -166,3 +166,20 @@ test('successful login resets failed login attempts', function () {
     $this->assertAuthenticated();
     expect($user->fresh()->failed_login_attempts)->toBe(0);
 });
+
+test('login failure is logged to audit_logs', function () {
+    $user = User::factory()->create();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'wrong-password',
+    ]);
+
+    $this->assertGuest();
+    expect(
+        AuditLog::query()
+            ->where('user_id', $user->id)
+            ->where('event', 'login.failed')
+            ->exists()
+    )->toBeTrue();
+});

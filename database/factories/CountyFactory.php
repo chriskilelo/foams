@@ -16,7 +16,7 @@ class CountyFactory extends Factory
 
         return [
             'name' => $name,
-            'code' => strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name), 0, 4)),
+            'code' => strtoupper(fake()->unique()->lexify('????')),
             'region_id' => Region::factory(),
         ];
     }
