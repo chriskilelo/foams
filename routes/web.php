@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\StatusLogController;
+use App\Http\Controllers\Assets\UptimeController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -12,12 +14,13 @@ Route::inertia('/', 'Welcome', [
 ])->name('home');
 
 Route::middleware(['auth', 'verified', 'two_factor', 'region.scope', 'not_public_role'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
 });
 
 Route::middleware(['auth', 'two_factor', 'region.scope'])->group(function () {
     Route::resource('assets', AssetController::class);
     Route::patch('assets/{asset}/assign', [AssetController::class, 'assign'])->name('assets.assign');
+    Route::get('assets/{asset}/uptime', [UptimeController::class, 'show'])->name('assets.uptime');
 
     Route::get('status-logs', [StatusLogController::class, 'index'])->name('status-logs.index');
     Route::get('assets/{asset}/status-logs/create', [StatusLogController::class, 'create'])->name('assets.status-logs.create');
