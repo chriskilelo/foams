@@ -8,7 +8,7 @@ use App\Models\Asset;
 use App\Models\AssetStatusLog;
 use App\Models\Region;
 use App\Models\Scopes\RegionScope;
-use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 class UptimeService
@@ -23,7 +23,7 @@ class UptimeService
      *
      * Returns a float percentage, e.g. 95.33.
      */
-    public function computeUptime(Asset $asset, Carbon $from, Carbon $to): float
+    public function computeUptime(Asset $asset, CarbonInterface $from, CarbonInterface $to): float
     {
         if ($from->isAfter($to)) {
             return 0.0;
@@ -31,13 +31,13 @@ class UptimeService
 
         $totalDays = (int) $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) + 1;
 
-        $operationalDays = AssetStatusLog::query()
+        $operationalDays = (int) AssetStatusLog::query()
             ->where('asset_id', $asset->id)
             ->where('status', AssetLogStatus::Operational->value)
-            ->whereBetween('logged_date', [$from->toDateString(), $to->toDateString()])
-            ->pluck('logged_date')
-            ->unique()
-            ->count();
+            ->whereDate('logged_date', '>=', $from->toDateString())
+            ->whereDate('logged_date', '<=', $to->toDateString())
+            ->selectRaw('COUNT(DISTINCT DATE(logged_date)) as cnt')
+            ->value('cnt');
 
         return round($operationalDays / $totalDays * 100, 2);
     }
@@ -61,9 +61,10 @@ class UptimeService
 
         $logsByDate = AssetStatusLog::query()
             ->where('asset_id', $asset->id)
-            ->whereBetween('logged_date', [$from->toDateString(), $to->toDateString()])
+            ->whereDate('logged_date', '>=', $from->toDateString())
+            ->whereDate('logged_date', '<=', $to->toDateString())
             ->get(['logged_date', 'status'])
-            ->groupBy(fn ($log) => $log->logged_date instanceof Carbon
+            ->groupBy(fn ($log) => $log->logged_date instanceof CarbonInterface
                 ? $log->logged_date->toDateString()
                 : substr((string) $log->logged_date, 0, 10)
             );
@@ -79,7 +80,7 @@ class UptimeService
                 : 'no_log';
 
             $calendar[] = ['date' => $dateStr, 'status' => $status];
-            $current->addDay();
+            $current = $current->addDay();
         }
 
         return $calendar;
@@ -122,8 +123,9 @@ class UptimeService
             $operationalDaysByAsset = AssetStatusLog::query()
                 ->whereIn('asset_id', $assetIds)
                 ->where('status', AssetLogStatus::Operational->value)
-                ->whereBetween('logged_date', [$from->toDateString(), $to->toDateString()])
-                ->selectRaw('asset_id, COUNT(DISTINCT logged_date) as operational_days')
+                ->whereDate('logged_date', '>=', $from->toDateString())
+                ->whereDate('logged_date', '<=', $to->toDateString())
+                ->selectRaw('asset_id, COUNT(DISTINCT DATE(logged_date)) as operational_days')
                 ->groupBy('asset_id')
                 ->pluck('operational_days', 'asset_id');
 
