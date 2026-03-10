@@ -6,6 +6,10 @@ use App\Enums\IssueStatus;
 use App\Events\IssueEscalated;
 use App\Events\IssueRaised;
 use App\Events\IssueStatusChanged;
+use App\Jobs\SendEscalationNotification;
+use App\Jobs\SendIssueAcknowledgementEmail;
+use App\Jobs\SendSmsJob;
+use App\Jobs\SendStatusChangeEmail;
 use App\Models\Issue;
 use App\Models\IssueActivity;
 use App\Models\Resolution;
@@ -54,6 +58,15 @@ class IssueService
             $issue->load('county');
 
             IssueRaised::dispatch($issue);
+
+            $reporterCategory = $data['reporter_category'] ?? null;
+            if (in_array($reporterCategory, ['general_public', 'public_servant'], true)) {
+                SendIssueAcknowledgementEmail::dispatch($issue);
+            }
+
+            if (($data['severity'] ?? null) === 'critical') {
+                $this->dispatchCriticalSmsAlerts($issue);
+            }
 
             return $issue;
         });
@@ -106,6 +119,8 @@ class IssueService
             $issue->load('county');
 
             IssueStatusChanged::dispatch($issue, $previousStatus, $newStatusEnum, $actor);
+
+            SendStatusChangeEmail::dispatch($issue, $previousStatus, $newStatusEnum);
         });
     }
 
@@ -139,6 +154,8 @@ class IssueService
             $issue->load('county');
 
             IssueEscalated::dispatch($issue, $actor, $reason);
+
+            SendEscalationNotification::dispatch($issue, $reason);
         });
     }
 
@@ -204,6 +221,26 @@ class IssueService
         );
 
         return 'ISS-'.str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Dispatch SMS alerts to all active RICTOs in the issue's region.
+     * Only called for critical-severity issues.
+     */
+    private function dispatchCriticalSmsAlerts(Issue $issue): void
+    {
+        $issue->load('county.region');
+        $region = $issue->county?->region;
+
+        if (! $region) {
+            return;
+        }
+
+        User::role('ricto')
+            ->where('is_active', true)
+            ->where('region_id', $region->id)
+            ->whereNotNull('phone')
+            ->each(fn (User $ricto) => SendSmsJob::dispatch($issue, $ricto));
     }
 
     /**
