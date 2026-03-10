@@ -9,6 +9,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Issues\AttachmentController;
 use App\Http\Controllers\Issues\IssueActivityController;
 use App\Http\Controllers\Issues\IssueController;
+use App\Http\Controllers\Issues\NocPanelController;
+use App\Http\Controllers\Issues\RegionalPanelController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -35,6 +37,10 @@ Route::middleware(['auth', 'two_factor', 'region.scope'])->group(function () {
     Route::post('issues/{issue}/escalate', [IssueController::class, 'escalate'])->name('issues.escalate');
     Route::post('issues/{issue}/resolve', [IssueController::class, 'resolve'])->name('issues.resolve');
     Route::post('issues/{issue}/close', [IssueController::class, 'close'])->name('issues.close');
+
+    // Issues panels
+    Route::get('issues/noc-panel', NocPanelController::class)->name('issues.noc-panel');
+    Route::get('issues/regional-panel', RegionalPanelController::class)->name('issues.regional-panel');
 
     // Issue comments (append-only)
     Route::post('issues/{issue}/activities', [IssueActivityController::class, 'store'])->name('issues.activities.store');

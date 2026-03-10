@@ -105,6 +105,22 @@ class IssuePolicy
     }
 
     /**
+     * NOC officers and directors can view the NOC central issues panel.
+     */
+    public function viewNocPanel(User $user): bool
+    {
+        return $user->hasAnyRole(['noc', 'director']);
+    }
+
+    /**
+     * RICTOs can view the regional issues panel.
+     */
+    public function viewRegionalPanel(User $user): bool
+    {
+        return $user->hasRole('ricto');
+    }
+
+    /**
      * Issues are never hard-deleted.
      */
     public function delete(User $user, Issue $issue): bool
