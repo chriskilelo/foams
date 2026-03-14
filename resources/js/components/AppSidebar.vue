@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
+    Activity,
     AlertCircle,
     BarChart3,
+    Bell,
+    CheckCircle,
     ClipboardList,
     FileText,
     LayoutGrid,
@@ -28,6 +31,15 @@ import {
 } from '@/components/ui/sidebar';
 import RegionController from '@/actions/App/Http/Controllers/Admin/RegionController';
 import CountyController from '@/actions/App/Http/Controllers/Admin/CountyController';
+import UserController from '@/actions/App/Http/Controllers/Admin/UserController';
+import AssetController from '@/actions/App/Http/Controllers/Assets/AssetController';
+import SlaConfigurationController from '@/actions/App/Http/Controllers/Admin/SlaConfigurationController';
+import AuditLogController from '@/actions/App/Http/Controllers/Admin/AuditLogController';
+import IssueController from '@/actions/App/Http/Controllers/Issues/IssueController';
+import IssueActivityController from '@/actions/App/Http/Controllers/Issues/IssueActivityController';
+import NocPanelController from '@/actions/App/Http/Controllers/Issues/NocPanelController';
+import ResolutionController from '@/actions/App/Http/Controllers/Issues/ResolutionController';
+import NotificationController from '@/actions/App/Http/Controllers/Notifications/NotificationController';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
@@ -42,19 +54,40 @@ const navItems = computed((): NavItem[] => {
     if (hasRole('admin')) {
         return [
             { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
-            { title: 'Assets', href: '#', icon: Wifi },
+            { title: 'Assets', href: AssetController.index.url(), icon: Wifi },
+            { title: 'Issues', href: IssueController.index.url(), icon: AlertCircle },
+            { title: 'NOC Panel', href: NocPanelController.url(), icon: Shield },
+            { title: 'Issue Activities', href: IssueActivityController.index.url(), icon: Activity },
+            { title: 'Resolutions', href: ResolutionController.index.url(), icon: CheckCircle },
+            { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
             { title: 'Regions', href: RegionController.index.url(), icon: MapPin },
             { title: 'Counties', href: CountyController.index.url(), icon: MapPin },
-            { title: 'Users', href: '#', icon: Users },
-            { title: 'SLA Config', href: '#', icon: Settings },
-            { title: 'Audit Log', href: '#', icon: ScrollText },
+            { title: 'Users', href: UserController.index.url(), icon: Users },
+            { title: 'SLA Config', href: SlaConfigurationController.index.url(), icon: Settings },
+            { title: 'Audit Log', href: AuditLogController.index.url(), icon: ScrollText },
         ];
     }
 
-    if (hasAnyRole('director', 'noc')) {
+    if (hasRole('director')) {
         return [
             { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
-            { title: 'Issues', href: '#', icon: AlertCircle },
+            { title: 'Issues', href: IssueController.index.url(), icon: AlertCircle },
+            { title: 'NOC Panel', href: NocPanelController.url(), icon: Shield },
+            { title: 'Resolutions', href: ResolutionController.index.url(), icon: CheckCircle },
+            { title: 'Issue Activities', href: IssueActivityController.index.url(), icon: Activity },
+            { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
+            { title: 'Reports', href: '#', icon: BarChart3 },
+        ];
+    }
+
+    if (hasRole('noc')) {
+        return [
+            { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
+            { title: 'Issues', href: IssueController.index.url(), icon: AlertCircle },
+            { title: 'NOC Panel', href: NocPanelController.url(), icon: Shield },
+            { title: 'Issue Activities', href: IssueActivityController.index.url(), icon: Activity },
+            { title: 'Resolutions', href: ResolutionController.index.url(), icon: CheckCircle },
+            { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
             { title: 'Reports', href: '#', icon: BarChart3 },
         ];
     }
@@ -62,8 +95,11 @@ const navItems = computed((): NavItem[] => {
     if (hasRole('ricto')) {
         return [
             { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
-            { title: 'Issues', href: '#', icon: AlertCircle },
-            { title: 'Assets', href: '#', icon: Wifi },
+            { title: 'Issues', href: IssueController.index.url(), icon: AlertCircle },
+            { title: 'Issue Activities', href: IssueActivityController.index.url(), icon: Activity },
+            { title: 'Resolutions', href: ResolutionController.index.url(), icon: CheckCircle },
+            { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
+            { title: 'Assets', href: AssetController.index.url(), icon: Wifi },
             { title: 'Officers', href: '#', icon: Users },
             { title: 'Reports', href: '#', icon: BarChart3 },
         ];
@@ -71,14 +107,16 @@ const navItems = computed((): NavItem[] => {
 
     if (hasAnyRole('icto', 'aicto')) {
         return [
-            { title: 'My Assets', href: '#', icon: Wifi },
+            { title: 'My Assets', href: AssetController.index.url(), icon: Wifi },
             { title: 'Log Status', href: '#', icon: ClipboardList },
-            { title: 'Issues', href: '#', icon: AlertCircle },
+            { title: 'Issues', href: IssueController.index.url(), icon: AlertCircle },
+            { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
         ];
     }
 
     return [
         { title: 'Dashboard', href: dashboard.url(), icon: LayoutGrid },
+        { title: 'Notifications', href: NotificationController.index.url(), icon: Bell },
     ];
 });
 </script>
