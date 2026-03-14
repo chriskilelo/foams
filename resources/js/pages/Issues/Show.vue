@@ -68,19 +68,22 @@ type Attachment = {
     uploaded_by: IssueUser;
 };
 type Option = { value: string; label: string };
+type AssignableUser = { id: number; name: string };
 type Can = {
     update_status: boolean;
     escalate: boolean;
     resolve: boolean;
     close: boolean;
+    assign: boolean;
 };
 
 const props = defineProps<{
     issue: Issue;
-    activities: Activity[] | undefined;
-    attachments: Attachment[] | undefined;
+    activities?: Activity[];
+    attachments?: Attachment[];
     resolution_types: Option[];
     allowed_transitions: Option[];
+    assignable_users: AssignableUser[];
     can: Can;
 }>();
 
@@ -93,10 +96,25 @@ const statusForm = useForm({ status: '', comment: '' });
 const escalateForm = useForm({ reason: '' });
 const resolveForm = useForm({ root_cause: '', steps_taken: [] as string[], resolution_type: '', comment: '' });
 const commentForm = useForm({ action_type: 'comment', comment: '', is_internal: false });
+const assignForm = useForm({ assigned_to_user_id: props.issue.assigned_to?.id?.toString() ?? 'none' });
+
+const uploadForm = useForm({ file: null as File | null });
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+function submitUpload() {
+    if (!uploadForm.file) return;
+    uploadForm.post(`/issues/${props.issue.id}/attachments`, {
+        onSuccess: () => {
+            uploadForm.reset();
+            if (fileInputRef.value) fileInputRef.value.value = '';
+        },
+    });
+}
 
 const showStatusModal = ref(false);
 const showEscalateModal = ref(false);
 const showResolveModal = ref(false);
+const showAssignModal = ref(false);
 
 function submitStatus() {
     statusForm.patch(IssueController.updateStatus.url(props.issue.id), {
@@ -119,6 +137,21 @@ function submitResolve() {
 function submitClose() {
     if (!window.confirm('Close this issue? It will no longer be editable.')) return;
     useForm({}).post(IssueController.close.url(props.issue.id));
+}
+
+function openAssignModal() {
+    assignForm.assigned_to_user_id = props.issue.assigned_to?.id?.toString() ?? 'none';
+    showAssignModal.value = true;
+}
+
+function submitAssign() {
+    assignForm
+        .transform((data) => ({
+            assigned_to_user_id: data.assigned_to_user_id === 'none' ? null : data.assigned_to_user_id,
+        }))
+        .patch(IssueController.assign.url(props.issue.id), {
+            onSuccess: () => { showAssignModal.value = false; },
+        });
 }
 
 function submitComment() {
@@ -243,6 +276,15 @@ function formatBytes(bytes: number): string {
                         @click="submitClose"
                     >
                         Close
+                    </Button>
+                    <Button
+                        v-if="can.assign && !['closed','duplicate'].includes(issue.status)"
+                        variant="outline"
+                        size="sm"
+                        class="text-[#2E5FA3] border-[#2E5FA3]/30 hover:bg-[#D6E4F7]"
+                        @click="openAssignModal"
+                    >
+                        {{ issue.assigned_to ? 'Reassign' : 'Assign' }}
                     </Button>
                 </div>
             </div>
@@ -424,20 +466,17 @@ function formatBytes(bytes: number): string {
 
                         <!-- Upload -->
                         <div class="border-t border-border px-5 py-4">
-                            <form
-                                method="POST"
-                                :action="`/issues/${issue.id}/attachments`"
-                                enctype="multipart/form-data"
-                                class="flex items-center gap-3"
-                            >
-                                <input type="hidden" name="_token" :value="(document as any).__inertia_csrf_token ?? ''" />
+                            <form class="flex items-center gap-3" @submit.prevent="submitUpload">
                                 <input
+                                    ref="fileInputRef"
                                     type="file"
-                                    name="file"
                                     accept=".jpg,.jpeg,.png,.pdf,.mp4,.log"
                                     class="text-sm text-muted-foreground file:mr-3 file:rounded file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-sm"
+                                    @change="uploadForm.file = ($event.target as HTMLInputElement).files?.[0] ?? null"
                                 />
-                                <Button type="submit" variant="outline" size="sm">Upload</Button>
+                                <Button type="submit" variant="outline" size="sm" :disabled="uploadForm.processing || !uploadForm.file">
+                                    Upload
+                                </Button>
                             </form>
                             <p class="mt-1 text-xs text-muted-foreground">Max 10 MB · jpg, jpeg, png, pdf, mp4, log</p>
                         </div>
@@ -578,6 +617,47 @@ function formatBytes(bytes: number): string {
                             class="bg-green-700 hover:bg-green-800 text-white"
                         >
                             Mark Resolved
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Assign Modal -->
+        <div v-if="showAssignModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div class="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
+                <h3 class="mb-4 text-lg font-semibold text-foreground">
+                    {{ issue.assigned_to ? 'Reassign Issue' : 'Assign Issue' }}
+                </h3>
+                <form class="flex flex-col gap-4" @submit.prevent="submitAssign">
+                    <div class="flex flex-col gap-1.5">
+                        <Label>Assign To</Label>
+                        <Select
+                            :model-value="assignForm.assigned_to_user_id"
+                            @update:model-value="assignForm.assigned_to_user_id = $event ?? 'none'"
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Unassigned</SelectItem>
+                                <SelectItem
+                                    v-for="u in assignable_users"
+                                    :key="u.id"
+                                    :value="u.id.toString()"
+                                >
+                                    {{ u.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p v-if="assignForm.errors.assigned_to_user_id" class="text-xs text-destructive">
+                            {{ assignForm.errors.assigned_to_user_id }}
+                        </p>
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <Button type="button" variant="outline" @click="showAssignModal = false">Cancel</Button>
+                        <Button type="submit" :disabled="assignForm.processing">
+                            {{ issue.assigned_to ? 'Reassign' : 'Assign' }}
                         </Button>
                     </div>
                 </form>
