@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             CountySeeder::class,
             UserSeeder::class,           // must run before SlaConfigurationSeeder (FK dependency)
             SlaConfigurationSeeder::class,
+            DemoDataSeeder::class,
         ]);
     }
 }

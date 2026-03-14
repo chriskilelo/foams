@@ -13,14 +13,15 @@ class RegionSeeder extends Seeder
      * @var list<array{name: string, code: string}>
      */
     private array $regions = [
-        ['name' => 'Nairobi',        'code' => 'NBI'],
-        ['name' => 'Coast',          'code' => 'CST'],
-        ['name' => 'North Eastern',  'code' => 'NEA'],
-        ['name' => 'Eastern',        'code' => 'EAS'],
-        ['name' => 'Central',        'code' => 'CTR'],
-        ['name' => 'Rift Valley',    'code' => 'RFT'],
-        ['name' => 'Nyanza',         'code' => 'NYZ'],
-        ['name' => 'Western',        'code' => 'WST'],
+        ['name' => 'Coast',                  'code' => 'CST'],
+        ['name' => 'Nyanza',                 'code' => 'NYZ'],
+        ['name' => 'Eastern',                'code' => 'EAS'],
+        ['name' => 'Western',                'code' => 'WST'],
+        ['name' => 'North Rift',             'code' => 'NRF'],
+        ['name' => 'South Rift',             'code' => 'SRF'],
+        ['name' => 'North Eastern',          'code' => 'NEA'],
+        ['name' => 'Nairobi and Central',    'code' => 'NBC'],
+
     ];
 
     public function run(): void
