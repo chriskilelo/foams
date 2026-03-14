@@ -105,6 +105,24 @@ class IssuePolicy
     }
 
     /**
+     * NOC, RICTO, and Director can assign issues.
+     * ICTO and AICTO cannot assign — only receive assignments.
+     */
+    public function assign(User $user, Issue $issue): bool
+    {
+        return $user->hasAnyRole(['noc', 'ricto', 'director']);
+    }
+
+    /**
+     * Internal roles can view global feeds (activity log, resolutions list).
+     * Public servants can only see their own submitted issues, not these global views.
+     */
+    public function viewGlobalFeed(User $user): bool
+    {
+        return $user->hasAnyRole(['director', 'noc', 'ricto', 'icto', 'aicto']);
+    }
+
+    /**
      * NOC officers and directors can view the NOC central issues panel.
      */
     public function viewNocPanel(User $user): bool

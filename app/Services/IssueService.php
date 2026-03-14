@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Enums\IssueStatus;
+use App\Events\IssueAssigned;
 use App\Events\IssueEscalated;
 use App\Events\IssueRaised;
 use App\Events\IssueStatusChanged;
+use App\Jobs\SendAssignmentNotification;
 use App\Jobs\SendEscalationNotification;
 use App\Jobs\SendIssueAcknowledgementEmail;
 use App\Jobs\SendSmsJob;
@@ -202,6 +204,39 @@ class IssueService
     }
 
     /**
+     * Assign or reassign an issue to an officer, recording the activity and dispatching notifications.
+     */
+    public function assignIssue(Issue $issue, ?int $assigneeId, User $actor): void
+    {
+        DB::transaction(function () use ($issue, $assigneeId, $actor) {
+            $issue->load('assignedTo');
+            $previousAssignee = $issue->assignedTo;
+
+            $newAssignee = $assigneeId ? User::find($assigneeId) : null;
+
+            $comment = $this->buildAssignmentComment($previousAssignee, $newAssignee);
+
+            $issue->update(['assigned_to_user_id' => $assigneeId]);
+
+            IssueActivity::create([
+                'issue_id' => $issue->id,
+                'user_id' => $actor->id,
+                'action_type' => 'assignment',
+                'previous_status' => null,
+                'new_status' => null,
+                'comment' => $comment,
+                'is_internal' => true,
+            ]);
+
+            if ($newAssignee) {
+                $issue->load('county.region', 'asset');
+                IssueAssigned::dispatch($issue, $newAssignee, $actor);
+                SendAssignmentNotification::dispatch($issue, $newAssignee);
+            }
+        });
+    }
+
+    /**
      * Close a resolved issue.
      */
     public function close(Issue $issue, User $actor): void
@@ -221,6 +256,22 @@ class IssueService
         );
 
         return 'ISS-'.str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Build a human-readable comment for an assignment activity.
+     */
+    private function buildAssignmentComment(?User $previous, ?User $new): string
+    {
+        if ($previous && $new) {
+            return "Reassigned from {$previous->name} to {$new->name}.";
+        }
+
+        if ($new) {
+            return "Assigned to {$new->name}.";
+        }
+
+        return 'Assignment removed.';
     }
 
     /**

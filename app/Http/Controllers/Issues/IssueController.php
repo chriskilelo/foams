@@ -7,6 +7,7 @@ use App\Enums\IssueStatus;
 use App\Enums\ReporterCategory;
 use App\Enums\ResolutionType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Issues\AssignIssueRequest;
 use App\Http\Requests\Issues\ResolveIssueRequest;
 use App\Http\Requests\Issues\StoreIssueRequest;
 use App\Http\Requests\Issues\UpdateIssueStatusRequest;
@@ -14,7 +15,9 @@ use App\Models\Asset;
 use App\Models\AuditLog;
 use App\Models\County;
 use App\Models\Issue;
+use App\Models\User;
 use App\Services\IssueService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -71,7 +74,7 @@ class IssueController extends Controller
         ]);
     }
 
-    public function show(Issue $issue): Response
+    public function show(Request $request, Issue $issue): Response
     {
         $this->authorize('view', $issue);
 
@@ -105,11 +108,13 @@ class IssueController extends Controller
             'attachments' => $attachments,
             'resolution_types' => $resolutionTypes,
             'allowed_transitions' => $allowedTransitions,
+            'assignable_users' => $this->getAssignableUsers($request->user()),
             'can' => [
                 'update_status' => auth()->user()->can('updateStatus', $issue),
                 'escalate' => auth()->user()->can('escalate', $issue),
                 'resolve' => auth()->user()->can('resolve', $issue),
                 'close' => auth()->user()->can('close', $issue),
+                'assign' => auth()->user()->can('assign', $issue),
             ],
         ]);
     }
@@ -265,6 +270,49 @@ class IssueController extends Controller
 
         return redirect()->route('issues.show', $issue)
             ->with('success', 'Issue closed.');
+    }
+
+    public function assign(AssignIssueRequest $request, Issue $issue): RedirectResponse
+    {
+        $this->authorize('assign', $issue);
+
+        $previousAssigneeId = $issue->assigned_to_user_id;
+        $newAssigneeId = $request->integer('assigned_to_user_id', 0) ?: null;
+
+        $this->issueService->assignIssue($issue, $newAssigneeId, $request->user());
+
+        AuditLog::create([
+            'user_id' => $request->user()->id,
+            'event' => 'issue.assigned',
+            'auditable_type' => Issue::class,
+            'auditable_id' => $issue->id,
+            'old_values' => ['assigned_to_user_id' => $previousAssigneeId],
+            'new_values' => ['assigned_to_user_id' => $newAssigneeId],
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('issues.show', $issue)
+            ->with('success', $newAssigneeId ? 'Issue assigned successfully.' : 'Assignment removed.');
+    }
+
+    /**
+     * Return active ICTO and NOC users eligible to be assigned an issue.
+     * For RICTOs the list is narrowed to their own region.
+     *
+     * @return Collection<int, User>
+     */
+    private function getAssignableUsers(User $actor): Collection
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->when(
+                $actor->hasRole('ricto') && $actor->region_id,
+                fn ($q) => $q->where('region_id', $actor->region_id)
+            )
+            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['icto', 'noc']))
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /**
